@@ -3,6 +3,7 @@ import Field from './components/Field';
 import NextPuyoField from './components/NextPuyoField';
 import { GameState, FIELD_WIDTH, FIELD_HEIGHT, PuyoState, PlayerState, PlayerPuyo, PuyoColor, FieldState } from './types';
 import { useSocket } from './hooks/useSocket';
+import { canMove, applyGravity, checkConnections } from './utils/gameLogic';
 import './App.css';
 
 const PUYO_COLORS: PuyoColor[] = ['red', 'green', 'blue', 'yellow', 'purple'];
@@ -39,69 +40,6 @@ function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [roomId, setRoomId] = useState('');
   const [joinedRoom, setJoinedRoom] = useState(false);
-
-  const canMove = useCallback((field: FieldState, puyo1: PlayerPuyo, puyo2: PlayerPuyo): boolean => {
-    if (puyo1.y >= FIELD_HEIGHT || puyo2.y >= FIELD_HEIGHT) return false;
-    if (puyo1.x < 0 || puyo1.x >= FIELD_WIDTH || puyo2.x < 0 || puyo2.x >= FIELD_WIDTH) return false;
-    if (puyo1.y >= 0 && field[puyo1.y][puyo1.x].color) return false;
-    if (puyo2.y >= 0 && field[puyo2.y][puyo2.x].color) return false;
-    return true;
-  }, []);
-
-  const applyGravity = useCallback((field: FieldState): FieldState => {
-    const newField = field.map(row => row.map(puyo => ({ ...puyo })));
-    for (let x = 0; x < FIELD_WIDTH; x++) {
-        let emptyRow = FIELD_HEIGHT - 1;
-        for (let y = FIELD_HEIGHT - 1; y >= 0; y--) {
-            if (newField[y][x].color) {
-                [newField[emptyRow][x], newField[y][x]] = [newField[y][x], newField[emptyRow][x]];
-                emptyRow--;
-            }
-        }
-    }
-    return newField;
-  }, []);
-
-  const checkConnections = useCallback((field: FieldState): { newField: FieldState, erased: boolean, erasedCount: number } => {
-    const toErase: boolean[][] = Array.from({ length: FIELD_HEIGHT }, () => Array(FIELD_WIDTH).fill(false));
-    let erased = false;
-    let erasedCount = 0;
-
-    for (let y = 0; y < FIELD_HEIGHT; y++) {
-      for (let x = 0; x < FIELD_WIDTH; x++) {
-        const puyo = field[y][x];
-        if (!puyo.color || toErase[y][x]) continue;
-
-        const q: [number, number][] = [[y, x]];
-        const visited: boolean[][] = Array.from({ length: FIELD_HEIGHT }, () => Array(FIELD_WIDTH).fill(false));
-        visited[y][x] = true;
-        const connected: [number, number][] = [[y, x]];
-
-        while (q.length > 0) {
-          const [curY, curX] = q.shift()!;
-          [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dy, dx]) => {
-            const ny = curY + dy;
-            const nx = curX + dx;
-            if (ny >= 0 && ny < FIELD_HEIGHT && nx >= 0 && nx < FIELD_WIDTH &&
-                !visited[ny][nx] && field[ny][nx].color === puyo.color) {
-              visited[ny][nx] = true;
-              q.push([ny, nx]);
-              connected.push([ny, nx]);
-            }
-          });
-        }
-
-        if (connected.length >= 4) {
-          erased = true;
-          erasedCount += connected.length;
-          connected.forEach(([ey, ex]) => { toErase[ey][ex] = true; });
-        }
-      }
-    }
-
-    const newField = field.map((row, y) => row.map((puyo, x) => toErase[y][x] ? { color: null } : puyo));
-    return { newField, erased, erasedCount };
-  }, []);
 
   const fixPuyo = useCallback(async () => {
     if (isProcessing) return;
