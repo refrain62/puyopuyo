@@ -82,6 +82,18 @@ function App() {
       case 'ArrowDown':
         dropPuyo();
         break;
+      case 'ArrowUp':
+        setPlayerState((prev) => {
+            const { puyo1, puyo2 } = prev;
+            const dx = puyo2.x - puyo1.x;
+            const dy = puyo2.y - puyo1.y;
+            const nextPuyo2 = { ...puyo2, x: puyo1.x - dy, y: puyo1.y + dx };
+            if (canMove(gameState.field, puyo1, nextPuyo2)) {
+                return { puyo1, puyo2: nextPuyo2 };
+            }
+            return prev;
+        });
+        break;
     }
   }, [gameState.field, canMove, dropPuyo]);
 
