@@ -1,46 +1,93 @@
-# Getting Started with Create React App
+# ぷよぷよオンライン
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+ReactとTypeScript、Node.js (Socket.IO) を使用して開発されたシンプルなぷよぷよゲームです。オンライン対戦機能を備えています。
 
-## Available Scripts
+## 機能
 
-In the project directory, you can run:
+- 基本的なぷよぷよのゲームプレイ
+- 連鎖、おじゃまぷよ、相殺、全消しボーナス
+- ネクストぷよ表示
+- オンライン対戦 (Socket.IO)
+- ゲームオーバーとリスタート
 
-### `npm start`
+## 技術スタック
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+- **フロントエンド**: React, TypeScript
+- **バックエンド**: Node.js, Express, Socket.IO
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## 開発環境のセットアップ
 
-### `npm test`
+### 1. リポジトリのクローン
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```bash
+git clone [リポジトリのURL]
+cd puyopuyo
+```
 
-### `npm run build`
+### 2. 依存関係のインストール
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+フロントエンドとバックエンドの両方の依存関係をインストールする必要があります。
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+#### フロントエンド
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+cd puyopuyo
+npm install
+```
 
-### `npm run eject`
+#### バックエンド
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+```bash
+cd puyopuyo/server
+npm install
+```
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## 実行方法
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+### 1. バックエンドサーバーの起動
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+新しいターミナルを開き、`puyopuyo/server` ディレクトリに移動して、以下のコマンドを実行します。
 
-## Learn More
+```bash
+cd puyopuyo/server
+npm run dev
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+サーバーがポート `4000` で起動します。
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### 2. フロントエンドアプリケーションの起動
+
+別のターミナルを開き、`puyopuyo` ディレクトリに移動して、以下のコマンドを実行します。
+
+```bash
+cd puyopuyo
+npm start
+```
+
+アプリケーションがポート `3000` で起動し、ブラウザが自動的に開きます。
+
+### 3. ゲームのプレイ
+
+1.  ブラウザで `http://localhost:3000` を開きます。
+2.  任意のルームIDを入力し、「Join Room」ボタンをクリックします。
+3.  **別のブラウザタブまたは別のブラウザで再度 `http://localhost:3000` にアクセスします。**
+4.  同じルームIDを入力し、「Join Room」ボタンをクリックします。
+5.  両方のプレイヤーがルームに参加すると、ゲームが開始されます。
+
+## テストの実行
+
+### フロントエンドのユニットテスト
+
+```bash
+cd puyopuyo
+npm test
+```
+
+## 今後の改善点
+
+-   より洗練されたUI/UX
+-   サウンドエフェクトとBGM
+-   ゲームバランスの調整
+-   より詳細な対戦履歴と統計
+-   観戦モード
+-   AI対戦
