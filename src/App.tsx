@@ -36,9 +36,8 @@ function App() {
   const [opponentState, setOpponentState] = useState<FieldState | null>(null);
   const [playerState, setPlayerState] = useState<PlayerState>(createNewPuyoPair());
   const [isProcessing, setIsProcessing] = useState(false);
-
-  // ... (rest of the logic: canMove, applyGravity, checkConnections, etc.)
-  // This will be updated in the next steps to emit and listen to socket events
+  const [roomId, setRoomId] = useState('');
+  const [joinedRoom, setJoinedRoom] = useState(false);
 
   const canMove = useCallback((field: FieldState, puyo1: PlayerPuyo, puyo2: PlayerPuyo): boolean => {
     if (puyo1.y >= FIELD_HEIGHT || puyo2.y >= FIELD_HEIGHT) return false;
@@ -211,6 +210,47 @@ function App() {
     };
   }, [handleKeyPress]);
 
+  // Socket.IO related effects
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on('startGame', () => {
+      console.log('Game started!');
+      setJoinedRoom(true);
+      // Reset game state for new game
+      setGameState(createInitialGameState());
+      setPlayerState(createNewPuyoPair());
+      setOpponentState(null);
+    });
+
+    socket.on('opponentFieldUpdate', (field: FieldState) => {
+      setOpponentState(field);
+    });
+
+    socket.on('roomFull', (roomId: string) => {
+      alert(`Room ${roomId} is full. Please try another room.`);
+    });
+
+    socket.on('opponentDisconnected', () => {
+      alert('Your opponent has disconnected. Game over.');
+      setGameState(prev => ({ ...prev, isGameOver: true }));
+    });
+
+    return () => {
+      socket.off('startGame');
+      socket.off('opponentFieldUpdate');
+      socket.off('roomFull');
+      socket.off('opponentDisconnected');
+    };
+  }, [socket]);
+
+  // Emit field updates to opponent
+  useEffect(() => {
+    if (socket && joinedRoom) {
+      socket.emit('updateField', displayField());
+    }
+  }, [socket, joinedRoom, gameState.field, playerState]); // Re-emit when field or playerState changes
+
   const displayField = (): PuyoState[][] => {
     if (isProcessing && !gameState.isGameOver) return gameState.field;
 
@@ -225,28 +265,49 @@ function App() {
     return newField;
   };
 
+  const handleJoinRoom = () => {
+    if (socket && roomId) {
+      socket.emit('joinRoom', roomId);
+    }
+  };
+
   const handleRestart = () => {
     const initialGameState = createInitialGameState();
     setPlayerState(initialGameState.nextPuyos.shift()!)
     setGameState(initialGameState);
+    setOpponentState(null);
+    setJoinedRoom(false);
+    setRoomId('');
   };
 
   return (
     <div className="App">
-      <h1>Puyo Puyo</h1>
-      <div className="game-container">
-        <div className="main-game">
-          <Field field={displayField()} />
-          <div className="side-panel">
-              <NextPuyoField puyos={gameState.nextPuyos} />
-              <div className="score">Score: {gameState.score}</div>
+      <h1>Puyo Puyo Online</h1>
+      {!joinedRoom ? (
+        <div className="room-selection">
+          <input
+            type="text"
+            placeholder="Enter Room ID"
+            value={roomId}
+            onChange={(e) => setRoomId(e.target.value)}
+          />
+          <button onClick={handleJoinRoom}>Join Room</button>
+        </div>
+      ) : (
+        <div className="game-container">
+          <div className="main-game">
+            <Field field={displayField()} />
+            <div className="side-panel">
+                <NextPuyoField puyos={gameState.nextPuyos} />
+                <div className="score">Score: {gameState.score}</div>
+            </div>
+          </div>
+          <div className="opponent-game">
+            <h2>Opponent</h2>
+            {opponentState ? <Field field={opponentState} /> : <p>Waiting for opponent...</p>}
           </div>
         </div>
-        <div className="opponent-game">
-          <h2>Opponent</h2>
-          {opponentState ? <Field field={opponentState} /> : <p>Waiting for opponent...</p>}
-        </div>
-      </div>
+      )}
       {gameState.isGameOver && (
         <div className="game-over">
           <h2>Game Over</h2>
