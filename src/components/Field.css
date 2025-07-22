@@ -1,0 +1,7 @@
+.field {
+  display: grid;
+  grid-template-columns: repeat(var(--field-width), 30px);
+  grid-template-rows: repeat(var(--field-height), 30px);
+  border: 2px solid #333;
+  width: calc(var(--field-width) * 30px);
+}
