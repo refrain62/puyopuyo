@@ -12,6 +12,7 @@ export type FieldState = PuyoState[][];
 export type GameState = {
   field: FieldState;
   score: number;
+  isGameOver: boolean;
 };
 
 export type PlayerPuyo = {

@@ -7,6 +7,7 @@ const createInitialGameState = (): GameState => ({
     Array(FIELD_WIDTH).fill({ color: null })
   ),
   score: 0,
+  isGameOver: false,
 });
 
 const createNewPlayerPuyo = (): PlayerState => {
@@ -93,8 +94,14 @@ function App() {
     const { puyo1, puyo2 } = playerState;
     if (puyo1.y >= 0) currentField[puyo1.y][puyo1.x] = { color: puyo1.color };
     if (puyo2.y >= 0) currentField[puyo2.y][puyo2.x] = { color: puyo2.color };
-    setGameState(prev => ({ ...prev, field: currentField }));
+    
+    if (currentField[0][2].color) {
+        setGameState(prev => ({ ...prev, isGameOver: true }));
+        setIsProcessing(false);
+        return;
+    }
 
+    setGameState(prev => ({ ...prev, field: currentField }));
     await sleep(50);
 
     let chain = 0;
@@ -118,7 +125,7 @@ function App() {
   }, [playerState, gameState.field, checkConnections, applyGravity, isProcessing]);
 
   const dropPuyo = useCallback(() => {
-    if (isProcessing) return;
+    if (isProcessing || gameState.isGameOver) return;
     const { puyo1, puyo2 } = playerState;
     const nextPuyo1 = { ...puyo1, y: puyo1.y + 1 };
     const nextPuyo2 = { ...puyo2, y: puyo2.y + 1 };
@@ -128,15 +135,16 @@ function App() {
     } else {
         fixPuyo();
     }
-  }, [gameState.field, playerState, canMove, fixPuyo, isProcessing]);
+  }, [gameState.field, playerState, canMove, fixPuyo, isProcessing, gameState.isGameOver]);
 
   useEffect(() => {
+    if (gameState.isGameOver) return;
     const gameLoop = setInterval(dropPuyo, 1000);
     return () => clearInterval(gameLoop);
-  }, [dropPuyo]);
+  }, [dropPuyo, gameState.isGameOver]);
 
   const handleKeyPress = useCallback((e: KeyboardEvent) => {
-    if (isProcessing) return;
+    if (isProcessing || gameState.isGameOver) return;
     switch (e.key) {
       case 'ArrowLeft':
         setPlayerState((prev) => {
@@ -174,7 +182,7 @@ function App() {
         });
         break;
     }
-  }, [gameState.field, canMove, dropPuyo, isProcessing]);
+  }, [gameState.field, canMove, dropPuyo, isProcessing, gameState.isGameOver]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyPress);
@@ -184,20 +192,33 @@ function App() {
   }, [handleKeyPress]);
 
   const displayField = (): PuyoState[][] => {
-    if (isProcessing) return gameState.field;
+    if (isProcessing && !gameState.isGameOver) return gameState.field;
 
     const newField = gameState.field.map(row => row.map(puyo => ({ ...puyo })));
     const { puyo1, puyo2 } = playerState;
 
-    if (puyo1.y >= 0) newField[puyo1.y][puyo1.x] = { color: puyo1.color };
-    if (puyo2.y >= 0) newField[puyo2.y][puyo2.x] = { color: puyo2.color };
+    if (!gameState.isGameOver) {
+        if (puyo1.y >= 0) newField[puyo1.y][puyo1.x] = { color: puyo1.color };
+        if (puyo2.y >= 0) newField[puyo2.y][puyo2.x] = { color: puyo2.color };
+    }
 
     return newField;
+  };
+
+  const handleRestart = () => {
+    setGameState(createInitialGameState());
+    setPlayerState(createNewPlayerPuyo());
   };
 
   return (
     <div className="App">
       <h1>Puyo Puyo</h1>
+      {gameState.isGameOver && (
+        <div className="game-over">
+          <h2>Game Over</h2>
+          <button onClick={handleRestart}>Restart</button>
+        </div>
+      )}
       <Field field={displayField()} />
       <div>Score: {gameState.score}</div>
     </div>
