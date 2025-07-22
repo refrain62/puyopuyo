@@ -13,3 +13,14 @@ export type GameState = {
   field: FieldState;
   score: number;
 };
+
+export type PlayerPuyo = {
+  x: number;
+  y: number;
+  color: PuyoColor;
+};
+
+export type PlayerState = {
+  puyo1: PlayerPuyo; // Axis puyo
+  puyo2: PlayerPuyo; // Child puyo
+};
