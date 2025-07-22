@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Field from './components/Field';
-import { GameState, FIELD_WIDTH, FIELD_HEIGHT, PuyoState, PlayerState, PuyoColor } from './types';
+import { GameState, FIELD_WIDTH, FIELD_HEIGHT, PuyoState, PlayerState, PlayerPuyo, PuyoColor, FieldState } from './types';
 
 const createInitialGameState = (): GameState => ({
   field: Array.from({ length: FIELD_HEIGHT }, () =>
