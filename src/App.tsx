@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Field from './components/Field';
 import NextPuyoField from './components/NextPuyoField';
 import { GameState, FIELD_WIDTH, FIELD_HEIGHT, PuyoState, PlayerState, PlayerPuyo, PuyoColor, FieldState } from './types';
+import { useSocket } from './hooks/useSocket';
 import './App.css';
 
 const PUYO_COLORS: PuyoColor[] = ['red', 'green', 'blue', 'yellow', 'purple'];
@@ -30,9 +31,14 @@ const createInitialGameState = (): GameState => {
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 function App() {
+  const socket = useSocket();
   const [gameState, setGameState] = useState<GameState>(createInitialGameState());
+  const [opponentState, setOpponentState] = useState<FieldState | null>(null);
   const [playerState, setPlayerState] = useState<PlayerState>(createNewPuyoPair());
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // ... (rest of the logic: canMove, applyGravity, checkConnections, etc.)
+  // This will be updated in the next steps to emit and listen to socket events
 
   const canMove = useCallback((field: FieldState, puyo1: PlayerPuyo, puyo2: PlayerPuyo): boolean => {
     if (puyo1.y >= FIELD_HEIGHT || puyo2.y >= FIELD_HEIGHT) return false;
@@ -229,10 +235,16 @@ function App() {
     <div className="App">
       <h1>Puyo Puyo</h1>
       <div className="game-container">
-        <Field field={displayField()} />
-        <div className="side-panel">
-            <NextPuyoField puyos={gameState.nextPuyos} />
-            <div className="score">Score: {gameState.score}</div>
+        <div className="main-game">
+          <Field field={displayField()} />
+          <div className="side-panel">
+              <NextPuyoField puyos={gameState.nextPuyos} />
+              <div className="score">Score: {gameState.score}</div>
+          </div>
+        </div>
+        <div className="opponent-game">
+          <h2>Opponent</h2>
+          {opponentState ? <Field field={opponentState} /> : <p>Waiting for opponent...</p>}
         </div>
       </div>
       {gameState.isGameOver && (
