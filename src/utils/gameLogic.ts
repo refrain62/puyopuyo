@@ -11,13 +11,16 @@ export const canMove = (field: FieldState, puyo1: PlayerPuyo, puyo2: PlayerPuyo)
 export const applyGravity = (field: FieldState): FieldState => {
   const newField = field.map(row => row.map(puyo => ({ ...puyo })));
   for (let x = 0; x < FIELD_WIDTH; x++) {
-      let emptyRow = FIELD_HEIGHT - 1;
-      for (let y = FIELD_HEIGHT - 1; y >= 0; y--) {
-          if (newField[y][x].color) {
-              [newField[emptyRow][x], newField[y][x]] = [newField[y][x], newField[emptyRow][x]];
-              emptyRow--;
-          }
+    let writeY = FIELD_HEIGHT - 1; // Points to the lowest empty spot
+    for (let y = FIELD_HEIGHT - 1; y >= 0; y--) {
+      if (newField[y][x].color) { // If there's a puyo
+        if (y !== writeY) { // If it's not already at the lowest possible spot
+          newField[writeY][x] = newField[y][x]; // Move puyo down
+          newField[y][x] = { color: null }; // Clear old spot
+        }
+        writeY--; // Move empty spot pointer up
       }
+    }
   }
   return newField;
 };
