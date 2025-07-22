@@ -62,9 +62,10 @@ function App() {
     return newField;
   }, []);
 
-  const checkConnections = useCallback((field: FieldState): { newField: FieldState, erased: boolean } => {
+  const checkConnections = useCallback((field: FieldState): { newField: FieldState, erased: boolean, erasedCount: number } => {
     const toErase: boolean[][] = Array.from({ length: FIELD_HEIGHT }, () => Array(FIELD_WIDTH).fill(false));
     let erased = false;
+    let erasedCount = 0;
 
     for (let y = 0; y < FIELD_HEIGHT; y++) {
       for (let x = 0; x < FIELD_WIDTH; x++) {
@@ -92,13 +93,14 @@ function App() {
 
         if (connected.length >= 4) {
           erased = true;
+          erasedCount += connected.length;
           connected.forEach(([ey, ex]) => { toErase[ey][ex] = true; });
         }
       }
     }
 
     const newField = field.map((row, y) => row.map((puyo, x) => toErase[y][x] ? { color: null } : puyo));
-    return { newField, erased };
+    return { newField, erased, erasedCount };
   }, []);
 
   const fixPuyo = useCallback(async () => {
@@ -121,12 +123,14 @@ function App() {
 
     let chain = 0;
     let totalErasedPuyos = 0;
+    const chainPower = [0, 8, 16, 32, 64, 96, 128, 160]; // Simplified chain power
+
     while (true) {
-        const { newField, erased } = checkConnections(currentField);
+        const { newField, erased, erasedCount } = checkConnections(currentField);
         if (!erased) break;
 
         chain++;
-        totalErasedPuyos += newField.flat().filter(p => p.color === null).length;
+        totalErasedPuyos += erasedCount;
         setGameState(prev => ({ ...prev, field: newField, score: prev.score + 100 * chain }));
         await sleep(300);
 
@@ -140,7 +144,16 @@ function App() {
     // Calculate nuisance puyos to send
     let nuisancePuyosToSend = 0;
     if (chain > 0) {
-        nuisancePuyosToSend = Math.max(0, totalErasedPuyos - 4) + (chain - 1) * 2; // Simple calculation
+        const baseNuisance = Math.floor(totalErasedPuyos / 4);
+        const chainBonus = chainPower[Math.min(chain, chainPower.length - 1)];
+        nuisancePuyosToSend = Math.floor((baseNuisance + chainBonus) / 70); // Simplified calculation
+    }
+
+    // All Clear Bonus
+    const isAllClear = currentField.flat().every(puyo => puyo.color === null);
+    if (isAllClear) {
+        nuisancePuyosToSend += 30; // All clear sends 30 nuisance puyos
+        console.log('All Clear!');
     }
 
     // Handle incoming nuisance puyos and send outgoing ones
