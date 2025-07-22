@@ -1,20 +1,29 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Field from './components/Field';
+import NextPuyoField from './components/NextPuyoField';
 import { GameState, FIELD_WIDTH, FIELD_HEIGHT, PuyoState, PlayerState, PlayerPuyo, PuyoColor, FieldState } from './types';
+import './App.css';
 
-const createInitialGameState = (): GameState => ({
-  field: Array.from({ length: FIELD_HEIGHT }, () =>
-    Array(FIELD_WIDTH).fill({ color: null })
-  ),
-  score: 0,
-  isGameOver: false,
+const PUYO_COLORS: PuyoColor[] = ['red', 'green', 'blue', 'yellow', 'purple'];
+const NEXT_PUYO_COUNT = 2;
+
+const createNewPuyoPair = (): PlayerState => ({
+    puyo1: { x: 2, y: -1, color: PUYO_COLORS[Math.floor(Math.random() * PUYO_COLORS.length)] },
+    puyo2: { x: 2, y: 0, color: PUYO_COLORS[Math.floor(Math.random() * PUYO_COLORS.length)] },
 });
 
-const createNewPlayerPuyo = (): PlayerState => {
-    const puyoColors: PuyoColor[] = ['red', 'green', 'blue', 'yellow', 'purple'];
+const createInitialGameState = (): GameState => {
+    const nextPuyos = [];
+    for (let i = 0; i < NEXT_PUYO_COUNT; i++) {
+        nextPuyos.push(createNewPuyoPair());
+    }
     return {
-        puyo1: { x: 2, y: -1, color: puyoColors[Math.floor(Math.random() * puyoColors.length)] },
-        puyo2: { x: 2, y: 0, color: puyoColors[Math.floor(Math.random() * puyoColors.length)] },
+        field: Array.from({ length: FIELD_HEIGHT }, () =>
+            Array(FIELD_WIDTH).fill({ color: null })
+        ),
+        score: 0,
+        isGameOver: false,
+        nextPuyos,
     };
 };
 
@@ -22,7 +31,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 function App() {
   const [gameState, setGameState] = useState<GameState>(createInitialGameState());
-  const [playerState, setPlayerState] = useState<PlayerState>(createNewPlayerPuyo());
+  const [playerState, setPlayerState] = useState<PlayerState>(createNewPuyoPair());
   const [isProcessing, setIsProcessing] = useState(false);
 
   const canMove = useCallback((field: FieldState, puyo1: PlayerPuyo, puyo2: PlayerPuyo): boolean => {
@@ -120,9 +129,14 @@ function App() {
         currentField = afterGravityField;
     }
 
-    setPlayerState(createNewPlayerPuyo());
+    const newNextPuyos = [...gameState.nextPuyos];
+    const nextPlayerPuyo = newNextPuyos.shift()!;
+    newNextPuyos.push(createNewPuyoPair());
+
+    setPlayerState(nextPlayerPuyo);
+    setGameState(prev => ({ ...prev, nextPuyos: newNextPuyos }));
     setIsProcessing(false);
-  }, [playerState, gameState.field, checkConnections, applyGravity, isProcessing]);
+  }, [playerState, gameState, checkConnections, applyGravity, isProcessing]);
 
   const dropPuyo = useCallback(() => {
     if (isProcessing || gameState.isGameOver) return;
@@ -135,7 +149,7 @@ function App() {
     } else {
         fixPuyo();
     }
-  }, [gameState.field, playerState, canMove, fixPuyo, isProcessing, gameState.isGameOver]);
+  }, [gameState, playerState, canMove, fixPuyo, isProcessing]);
 
   useEffect(() => {
     if (gameState.isGameOver) return;
@@ -182,7 +196,7 @@ function App() {
         });
         break;
     }
-  }, [gameState.field, canMove, dropPuyo, isProcessing, gameState.isGameOver]);
+  }, [gameState, canMove, dropPuyo, isProcessing]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyPress);
@@ -206,21 +220,27 @@ function App() {
   };
 
   const handleRestart = () => {
-    setGameState(createInitialGameState());
-    setPlayerState(createNewPlayerPuyo());
+    const initialGameState = createInitialGameState();
+    setPlayerState(initialGameState.nextPuyos.shift()!)
+    setGameState(initialGameState);
   };
 
   return (
     <div className="App">
       <h1>Puyo Puyo</h1>
+      <div className="game-container">
+        <Field field={displayField()} />
+        <div className="side-panel">
+            <NextPuyoField puyos={gameState.nextPuyos} />
+            <div className="score">Score: {gameState.score}</div>
+        </div>
+      </div>
       {gameState.isGameOver && (
         <div className="game-over">
           <h2>Game Over</h2>
           <button onClick={handleRestart}>Restart</button>
         </div>
       )}
-      <Field field={displayField()} />
-      <div>Score: {gameState.score}</div>
     </div>
   );
 }

@@ -1,0 +1,22 @@
+.next-puyo-container {
+  margin-left: 20px;
+  padding: 10px;
+  border: 2px solid #333;
+  background-color: #f0f0f0;
+}
+
+.next-puyo-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.next-puyo-pair {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 10px;
+}
+
+.next-puyo-pair .puyo {
+  width: 25px;
+  height: 25px;
+}
