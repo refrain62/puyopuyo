@@ -32,6 +32,71 @@ export const useAIGame = () => {
   const [aiPlayerState, setAIPlayerState] = useState<PlayerState>(createNewPuyoPair());
   const [isAIGameOver, setIsAIGameOver] = useState(false);
 
+  /**
+   * AIが最適な手を決定するための関数。
+   * 現在は、最も多くのぷよが消える位置を探すシンプルなロジック。
+   * @param currentField AIの現在のフィールド
+   * @param currentPuyo AIの操作ぷよ
+   * @returns 最適な移動後のぷよの状態
+   */
+  const findBestAIMove = useCallback((currentField: FieldState, currentPuyo: PlayerState): PlayerState => {
+    let bestMove: PlayerState = { ...currentPuyo };
+    let maxEvaluation = -1; // 評価値
+
+    // 可能なすべてのX座標と回転を試す
+    for (let x = 0; x < FIELD_WIDTH; x++) {
+      for (let rotation = 0; rotation < 4; rotation++) { // 4方向の回転をシミュレート
+        let simulatedPuyo: PlayerState = { ...currentPuyo };
+        // 回転を適用
+        if (rotation > 0) {
+          const { puyo1, puyo2 } = simulatedPuyo;
+          const dx = puyo2.x - puyo1.x;
+          const dy = puyo2.y - puyo1.y;
+          simulatedPuyo.puyo2 = { ...puyo2, x: puyo1.x - dy, y: puyo1.y + dx };
+        }
+
+        // X座標を調整
+        simulatedPuyo.puyo1.x = x;
+        simulatedPuyo.puyo2.x = x + (simulatedPuyo.puyo2.x - currentPuyo.puyo1.x); // 相対位置を維持
+
+        // ぷよを一番下まで落とすシミュレーション
+        let tempPuyo: PlayerState = { ...simulatedPuyo };
+        while (canMove(currentField, { ...tempPuyo.puyo1, y: tempPuyo.puyo1.y + 1 }, { ...tempPuyo.puyo2, y: tempPuyo.puyo2.y + 1 })) {
+          tempPuyo.puyo1.y++;
+          tempPuyo.puyo2.y++;
+        }
+
+        // シミュレーション後のフィールドを作成
+        const simulatedField = currentField.map(row => row.map(puyo => ({ ...puyo })));
+        // ぷよがフィールドの有効な範囲内にあるか確認してからアクセス
+        if (tempPuyo.puyo1.y >= 0 && tempPuyo.puyo1.y < FIELD_HEIGHT && tempPuyo.puyo1.x >= 0 && tempPuyo.puyo1.x < FIELD_WIDTH) {
+            simulatedField[tempPuyo.puyo1.y][tempPuyo.puyo1.x] = { color: tempPuyo.puyo1.color };
+        }
+        if (tempPuyo.puyo2.y >= 0 && tempPuyo.puyo2.y < FIELD_HEIGHT && tempPuyo.puyo2.x >= 0 && tempPuyo.puyo2.x < FIELD_WIDTH) {
+            simulatedField[tempPuyo.puyo2.y][tempPuyo.puyo2.x] = { color: tempPuyo.puyo2.color };
+        }
+
+        // 接続をチェックし、消去されるぷよの数と連鎖数を評価
+        let evaluation = 0;
+        let simulatedChain = 0;
+        let tempSimulatedField = simulatedField;
+        while (true) {
+            const { newField, erased, erasedCount } = checkConnections(tempSimulatedField);
+            if (!erased) break;
+            simulatedChain++;
+            evaluation += erasedCount * 10 + simulatedChain * 100; // 消去数と連鎖数で評価
+            tempSimulatedField = applyGravity(newField);
+        }
+
+        if (evaluation > maxEvaluation) {
+          maxEvaluation = evaluation;
+          bestMove = tempPuyo;
+        }
+      }
+    }
+    return bestMove;
+  }, [canMove, checkConnections, applyGravity]);
+
   const fixPuyo = useCallback(async (isAI: boolean) => {
     const currentPuyoState = isAI ? aiPlayerState : playerState;
     const setCurrentGameState = isAI ? setAIGameState : setGameState;
@@ -42,8 +107,13 @@ export const useAIGame = () => {
 
     let currentField = (isAI ? aiGameState.field : gameState.field).map(row => row.map(puyo => ({ ...puyo })));
     const { puyo1, puyo2 } = currentPuyoState;
-    if (puyo1.y >= 0) currentField[puyo1.y][puyo1.x] = { color: puyo1.color };
-    if (puyo2.y >= 0) currentField[puyo2.y][puyo2.x] = { color: puyo2.color };
+    // ぷよがフィールドの有効な範囲内にあるか確認してからアクセス
+    if (puyo1.y >= 0 && puyo1.y < FIELD_HEIGHT && puyo1.x >= 0 && puyo1.x < FIELD_WIDTH) {
+        currentField[puyo1.y][puyo1.x] = { color: puyo1.color };
+    }
+    if (puyo2.y >= 0 && puyo2.y < FIELD_HEIGHT && puyo2.x >= 0 && puyo2.x < FIELD_WIDTH) {
+        currentField[puyo2.y][puyo2.x] = { color: puyo2.color };
+    }
     
     if (currentField[0][2].color) {
         setCurrentGameState(prev => ({ ...prev, isGameOver: true }));
@@ -154,10 +224,15 @@ export const useAIGame = () => {
 
   // AI game loop (simple: just drops puyo)
   useEffect(() => {
-    if (aiGameState.isGameOver) return;
-    const aiGameLoop = setInterval(() => dropPuyo(true), 1000);
+    if (aiGameState.isGameOver || isProcessing) return; // 処理中はAIを停止
+    const aiGameLoop = setInterval(() => {
+      // AIの思考と操作
+      const bestMove = findBestAIMove(aiGameState.field, aiPlayerState);
+      setAIPlayerState(bestMove);
+      dropPuyo(true); // ぷよを落下させる
+    }, 1000);
     return () => clearInterval(aiGameLoop);
-  }, [dropPuyo, aiGameState.isGameOver]);
+  }, [dropPuyo, aiGameState.isGameOver, aiGameState.field, aiPlayerState, findBestAIMove, isProcessing]);
 
   const handleKeyPress = useCallback((e: KeyboardEvent) => {
     if (isProcessing || gameState.isGameOver) return;
@@ -211,9 +286,12 @@ export const useAIGame = () => {
     if (isProcessing && !gameState.isGameOver) return gameState.field;
     const newField = gameState.field.map(row => row.map(puyo => ({ ...puyo })));
     const { puyo1, puyo2 } = playerState;
-    if (!gameState.isGameOver) {
-        if (puyo1.y >= 0) newField[puyo1.y][puyo1.x] = { color: puyo1.color };
-        if (puyo2.y >= 0) newField[puyo2.y][puyo2.x] = { color: puyo2.color };
+    // ぷよがフィールドの有効な範囲内にあるか確認してからアクセス
+    if (puyo1.y >= 0 && puyo1.y < FIELD_HEIGHT && puyo1.x >= 0 && puyo1.x < FIELD_WIDTH) {
+        newField[puyo1.y][puyo1.x] = { color: puyo1.color };
+    }
+    if (puyo2.y >= 0 && puyo2.y < FIELD_HEIGHT && puyo2.x >= 0 && puyo2.x < FIELD_WIDTH) {
+        newField[puyo2.y][puyo2.x] = { color: puyo2.color };
     }
     return newField;
   };
@@ -222,9 +300,12 @@ export const useAIGame = () => {
     if (isProcessing && !aiGameState.isGameOver) return aiGameState.field;
     const newField = aiGameState.field.map(row => row.map(puyo => ({ ...puyo })));
     const { puyo1, puyo2 } = aiPlayerState;
-    if (!aiGameState.isGameOver) {
-        if (puyo1.y >= 0) newField[puyo1.y][puyo1.x] = { color: puyo1.color };
-        if (puyo2.y >= 0) newField[puyo2.y][puyo2.x] = { color: puyo2.color };
+    // ぷよがフィールドの有効な範囲内にあるか確認してからアクセス
+    if (puyo1.y >= 0 && puyo1.y < FIELD_HEIGHT && puyo1.x >= 0 && puyo1.x < FIELD_WIDTH) {
+        newField[puyo1.y][puyo1.x] = { color: puyo1.color };
+    }
+    if (puyo2.y >= 0 && puyo2.y < FIELD_HEIGHT && puyo2.x >= 0 && puyo2.x < FIELD_WIDTH) {
+        newField[puyo2.y][puyo2.x] = { color: puyo2.color };
     }
     return newField;
   };
