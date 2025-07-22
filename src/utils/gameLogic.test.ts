@@ -39,7 +39,7 @@ describe('canMove', () => {
 });
 
 describe('applyGravity', () => {
-  test('should apply gravity correctly', () => {
+  test('should apply gravity correctly with single puyos', () => {
     const initialField: FieldState = createEmptyField(FIELD_WIDTH, FIELD_HEIGHT);
     initialField[FIELD_HEIGHT - 2][0] = { color: 'red' };
     initialField[FIELD_HEIGHT - 3][1] = { color: 'blue' };
@@ -58,10 +58,34 @@ describe('applyGravity', () => {
 
     expect(applyGravity(initialField)).toEqual(initialField);
   });
+
+  test('should handle multiple puyos in a column', () => {
+    const initialField: FieldState = createEmptyField(FIELD_WIDTH, FIELD_HEIGHT);
+    initialField[FIELD_HEIGHT - 4][0] = { color: 'red' };
+    initialField[FIELD_HEIGHT - 2][0] = { color: 'blue' };
+
+    const expectedField: FieldState = createEmptyField(FIELD_WIDTH, FIELD_HEIGHT);
+    expectedField[FIELD_HEIGHT - 1][0] = { color: 'blue' };
+    expectedField[FIELD_HEIGHT - 2][0] = { color: 'red' };
+
+    expect(applyGravity(initialField)).toEqual(expectedField);
+  });
+
+  test('should handle empty columns', () => {
+    const initialField: FieldState = createEmptyField(FIELD_WIDTH, FIELD_HEIGHT);
+    initialField[FIELD_HEIGHT - 1][0] = { color: 'red' };
+    initialField[FIELD_HEIGHT - 1][2] = { color: 'blue' };
+
+    const expectedField: FieldState = createEmptyField(FIELD_WIDTH, FIELD_HEIGHT);
+    expectedField[FIELD_HEIGHT - 1][0] = { color: 'red' };
+    expectedField[FIELD_HEIGHT - 1][2] = { color: 'blue' };
+
+    expect(applyGravity(initialField)).toEqual(expectedField);
+  });
 });
 
 describe('checkConnections', () => {
-  test('should erase 4 connected puyos of the same color', () => {
+  test('should erase 4 connected puyos of the same color (horizontal)', () => {
     const initialField: FieldState = createEmptyField(FIELD_WIDTH, FIELD_HEIGHT);
     initialField[0][0] = { color: 'red' };
     initialField[0][1] = { color: 'red' };
@@ -75,6 +99,54 @@ describe('checkConnections', () => {
     expect(newField[0][1].color).toBe(null);
     expect(newField[0][2].color).toBe(null);
     expect(newField[0][3].color).toBe(null);
+  });
+
+  test('should erase 4 connected puyos of the same color (vertical)', () => {
+    const initialField: FieldState = createEmptyField(FIELD_WIDTH, FIELD_HEIGHT);
+    initialField[0][0] = { color: 'red' };
+    initialField[1][0] = { color: 'red' };
+    initialField[2][0] = { color: 'red' };
+    initialField[3][0] = { color: 'red' };
+
+    const { newField, erased, erasedCount } = checkConnections(initialField);
+    expect(erased).toBe(true);
+    expect(erasedCount).toBe(4);
+    expect(newField[0][0].color).toBe(null);
+    expect(newField[1][0].color).toBe(null);
+    expect(newField[2][0].color).toBe(null);
+    expect(newField[3][0].color).toBe(null);
+  });
+
+  test('should erase 4 connected puyos of the same color (L-shape)', () => {
+    const initialField: FieldState = createEmptyField(FIELD_WIDTH, FIELD_HEIGHT);
+    initialField[0][0] = { color: 'red' };
+    initialField[1][0] = { color: 'red' };
+    initialField[2][0] = { color: 'red' };
+    initialField[2][1] = { color: 'red' };
+
+    const { newField, erased, erasedCount } = checkConnections(initialField);
+    expect(erased).toBe(true);
+    expect(erasedCount).toBe(4);
+    expect(newField[0][0].color).toBe(null);
+    expect(newField[1][0].color).toBe(null);
+    expect(newField[2][0].color).toBe(null);
+    expect(newField[2][1].color).toBe(null);
+  });
+
+  test('should erase 4 connected puyos of the same color (T-shape)', () => {
+    const initialField: FieldState = createEmptyField(FIELD_WIDTH, FIELD_HEIGHT);
+    initialField[1][0] = { color: 'red' };
+    initialField[1][1] = { color: 'red' };
+    initialField[1][2] = { color: 'red' };
+    initialField[0][1] = { color: 'red' };
+
+    const { newField, erased, erasedCount } = checkConnections(initialField);
+    expect(erased).toBe(true);
+    expect(erasedCount).toBe(4);
+    expect(newField[1][0].color).toBe(null);
+    expect(newField[1][1].color).toBe(null);
+    expect(newField[1][2].color).toBe(null);
+    expect(newField[0][1].color).toBe(null);
   });
 
   test('should not erase less than 4 connected puyos', () => {
@@ -112,5 +184,50 @@ describe('checkConnections', () => {
     expect(newField[0][4].color).toBe(null);
     expect(newField[1][3].color).toBe(null);
     expect(newField[1][4].color).toBe(null);
+  });
+
+  test('should not erase diagonally connected puyos', () => {
+    const initialField: FieldState = createEmptyField(FIELD_WIDTH, FIELD_HEIGHT);
+    initialField[0][0] = { color: 'red' };
+    initialField[1][1] = { color: 'red' };
+    initialField[2][2] = { color: 'red' };
+    initialField[3][3] = { color: 'red' };
+
+    const { newField, erased, erasedCount } = checkConnections(initialField);
+    expect(erased).toBe(false);
+    expect(erasedCount).toBe(0);
+    expect(newField).toEqual(initialField);
+  });
+
+  test('should handle a large connected group', () => {
+    const initialField: FieldState = createEmptyField(FIELD_WIDTH, FIELD_HEIGHT);
+    // Create a 3x3 block of red puyos
+    for (let y = 0; y < 3; y++) {
+      for (let x = 0; x < 3; x++) {
+        initialField[y][x] = { color: 'red' };
+      }
+    }
+
+    const { newField, erased, erasedCount } = checkConnections(initialField);
+    expect(erased).toBe(true);
+    expect(erasedCount).toBe(9);
+    // All 9 puyos should be erased
+    for (let y = 0; y < 3; y++) {
+      for (let x = 0; x < 3; x++) {
+        expect(newField[y][x].color).toBe(null);
+      }
+    }
+  });
+
+  test('should handle no connections', () => {
+    const initialField: FieldState = createEmptyField(FIELD_WIDTH, FIELD_HEIGHT);
+    initialField[0][0] = { color: 'red' };
+    initialField[1][1] = { color: 'blue' };
+    initialField[2][2] = { color: 'green' };
+
+    const { newField, erased, erasedCount } = checkConnections(initialField);
+    expect(erased).toBe(false);
+    expect(erasedCount).toBe(0);
+    expect(newField).toEqual(initialField);
   });
 });

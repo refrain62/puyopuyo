@@ -13,7 +13,6 @@ function App() {
     displayField,
     handleJoinRoom,
     handleRestart,
-    handleKeyPress,
     setRoomId,
   } = usePuyoGame();
 

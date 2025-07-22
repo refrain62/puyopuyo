@@ -281,7 +281,6 @@ export const usePuyoGame = () => {
     displayField,
     handleJoinRoom,
     handleRestart,
-    handleKeyPress,
     setRoomId,
   };
 };
