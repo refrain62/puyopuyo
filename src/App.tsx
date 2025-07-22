@@ -17,9 +17,12 @@ const createNewPlayerPuyo = (): PlayerState => {
     };
 };
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 function App() {
   const [gameState, setGameState] = useState<GameState>(createInitialGameState());
   const [playerState, setPlayerState] = useState<PlayerState>(createNewPlayerPuyo());
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const canMove = useCallback((field: FieldState, puyo1: PlayerPuyo, puyo2: PlayerPuyo): boolean => {
     if (puyo1.y >= FIELD_HEIGHT || puyo2.y >= FIELD_HEIGHT) return false;
@@ -27,6 +30,20 @@ function App() {
     if (puyo1.y >= 0 && field[puyo1.y][puyo1.x].color) return false;
     if (puyo2.y >= 0 && field[puyo2.y][puyo2.x].color) return false;
     return true;
+  }, []);
+
+  const applyGravity = useCallback((field: FieldState): FieldState => {
+    const newField = field.map(row => row.map(puyo => ({ ...puyo })));
+    for (let x = 0; x < FIELD_WIDTH; x++) {
+        let emptyRow = FIELD_HEIGHT - 1;
+        for (let y = FIELD_HEIGHT - 1; y >= 0; y--) {
+            if (newField[y][x].color) {
+                [newField[emptyRow][x], newField[y][x]] = [newField[y][x], newField[emptyRow][x]];
+                emptyRow--;
+            }
+        }
+    }
+    return newField;
   }, []);
 
   const checkConnections = useCallback((field: FieldState): { newField: FieldState, erased: boolean } => {
@@ -68,21 +85,40 @@ function App() {
     return { newField, erased };
   }, []);
 
-  const fixPuyo = useCallback(() => {
-    setGameState(prev => {
-        const newField = prev.field.map(row => row.map(puyo => ({ ...puyo })));
-        const { puyo1, puyo2 } = playerState;
-        if (puyo1.y >= 0) newField[puyo1.y][puyo1.x] = { color: puyo1.color };
-        if (puyo2.y >= 0) newField[puyo2.y][puyo2.x] = { color: puyo2.color };
-        
-        const { newField: afterErasedField, erased } = checkConnections(newField);
+  const fixPuyo = useCallback(async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
 
-        return { ...prev, field: afterErasedField };
-    });
+    let currentField = gameState.field.map(row => row.map(puyo => ({ ...puyo })));
+    const { puyo1, puyo2 } = playerState;
+    if (puyo1.y >= 0) currentField[puyo1.y][puyo1.x] = { color: puyo1.color };
+    if (puyo2.y >= 0) currentField[puyo2.y][puyo2.x] = { color: puyo2.color };
+    setGameState(prev => ({ ...prev, field: currentField }));
+
+    await sleep(50);
+
+    let chain = 0;
+    while (true) {
+        const { newField, erased } = checkConnections(currentField);
+        if (!erased) break;
+
+        chain++;
+        setGameState(prev => ({ ...prev, field: newField, score: prev.score + 100 * chain }));
+        await sleep(300);
+
+        const afterGravityField = applyGravity(newField);
+        setGameState(prev => ({ ...prev, field: afterGravityField }));
+        await sleep(300);
+
+        currentField = afterGravityField;
+    }
+
     setPlayerState(createNewPlayerPuyo());
-  }, [playerState, checkConnections]);
+    setIsProcessing(false);
+  }, [playerState, gameState.field, checkConnections, applyGravity, isProcessing]);
 
   const dropPuyo = useCallback(() => {
+    if (isProcessing) return;
     const { puyo1, puyo2 } = playerState;
     const nextPuyo1 = { ...puyo1, y: puyo1.y + 1 };
     const nextPuyo2 = { ...puyo2, y: puyo2.y + 1 };
@@ -92,7 +128,7 @@ function App() {
     } else {
         fixPuyo();
     }
-  }, [gameState.field, playerState, canMove, fixPuyo]);
+  }, [gameState.field, playerState, canMove, fixPuyo, isProcessing]);
 
   useEffect(() => {
     const gameLoop = setInterval(dropPuyo, 1000);
@@ -100,6 +136,7 @@ function App() {
   }, [dropPuyo]);
 
   const handleKeyPress = useCallback((e: KeyboardEvent) => {
+    if (isProcessing) return;
     switch (e.key) {
       case 'ArrowLeft':
         setPlayerState((prev) => {
@@ -137,7 +174,7 @@ function App() {
         });
         break;
     }
-  }, [gameState.field, canMove, dropPuyo]);
+  }, [gameState.field, canMove, dropPuyo, isProcessing]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyPress);
@@ -147,6 +184,8 @@ function App() {
   }, [handleKeyPress]);
 
   const displayField = (): PuyoState[][] => {
+    if (isProcessing) return gameState.field;
+
     const newField = gameState.field.map(row => row.map(puyo => ({ ...puyo })));
     const { puyo1, puyo2 } = playerState;
 
@@ -160,6 +199,7 @@ function App() {
     <div className="App">
       <h1>Puyo Puyo</h1>
       <Field field={displayField()} />
+      <div>Score: {gameState.score}</div>
     </div>
   );
 }
