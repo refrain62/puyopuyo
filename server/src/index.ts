@@ -60,6 +60,18 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Send nuisance puyos to opponent
+  socket.on('sendNuisancePuyos', (nuisancePuyos: number) => {
+    const room = rooms.find(r => r.players.includes(socket.id));
+    if (room) {
+      const opponentId = room.players.find(id => id !== socket.id);
+      if (opponentId) {
+        io.to(opponentId).emit('receiveNuisancePuyos', nuisancePuyos);
+        console.log(`User ${socket.id} sent ${nuisancePuyos} nuisance puyos to ${opponentId}`);
+      }
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('user disconnected:', socket.id);
     // Remove player from room

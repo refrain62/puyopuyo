@@ -25,6 +25,7 @@ const createInitialGameState = (): GameState => {
         score: 0,
         isGameOver: false,
         nextPuyos,
+        incomingNuisancePuyos: 0,
     };
 };
 
@@ -119,11 +120,13 @@ function App() {
     await sleep(50);
 
     let chain = 0;
+    let totalErasedPuyos = 0;
     while (true) {
         const { newField, erased } = checkConnections(currentField);
         if (!erased) break;
 
         chain++;
+        totalErasedPuyos += newField.flat().filter(p => p.color === null).length;
         setGameState(prev => ({ ...prev, field: newField, score: prev.score + 100 * chain }));
         await sleep(300);
 
@@ -134,6 +137,24 @@ function App() {
         currentField = afterGravityField;
     }
 
+    // Calculate nuisance puyos to send
+    let nuisancePuyosToSend = 0;
+    if (chain > 0) {
+        nuisancePuyosToSend = Math.max(0, totalErasedPuyos - 4) + (chain - 1) * 2; // Simple calculation
+    }
+
+    // Handle incoming nuisance puyos and send outgoing ones
+    setGameState(prev => {
+        let remainingNuisance = prev.incomingNuisancePuyos - nuisancePuyosToSend;
+        if (remainingNuisance < 0) {
+            if (socket && joinedRoom) {
+                socket.emit('sendNuisancePuyos', Math.abs(remainingNuisance));
+            }
+            remainingNuisance = 0;
+        }
+        return { ...prev, incomingNuisancePuyos: remainingNuisance };
+    });
+
     const newNextPuyos = [...gameState.nextPuyos];
     const nextPlayerPuyo = newNextPuyos.shift()!;
     newNextPuyos.push(createNewPuyoPair());
@@ -141,7 +162,7 @@ function App() {
     setPlayerState(nextPlayerPuyo);
     setGameState(prev => ({ ...prev, nextPuyos: newNextPuyos }));
     setIsProcessing(false);
-  }, [playerState, gameState, checkConnections, applyGravity, isProcessing]);
+  }, [playerState, gameState, checkConnections, applyGravity, isProcessing, socket, joinedRoom]);
 
   const dropPuyo = useCallback(() => {
     if (isProcessing || gameState.isGameOver) return;
@@ -152,7 +173,24 @@ function App() {
     if (canMove(gameState.field, nextPuyo1, nextPuyo2)) {
         setPlayerState({ puyo1: nextPuyo1, puyo2: nextPuyo2 });
     } else {
+        // If puyo cannot move down, fix it and then check for incoming nuisance puyos
         fixPuyo();
+        if (gameState.incomingNuisancePuyos > 0) {
+            setGameState(prev => {
+                const newField = prev.field.map(row => row.map(puyo => ({ ...puyo })));
+                let nuisanceCount = prev.incomingNuisancePuyos;
+                for (let i = 0; i < nuisanceCount; i++) {
+                    const x = Math.floor(Math.random() * FIELD_WIDTH);
+                    for (let y = 0; y < FIELD_HEIGHT; y++) {
+                        if (!newField[y][x].color) {
+                            newField[y][x] = { color: 'purple' }; // Nuisance puyos are purple
+                            break;
+                        }
+                    }
+                }
+                return { ...prev, field: newField, incomingNuisancePuyos: 0 };
+            });
+        }
     }
   }, [gameState, playerState, canMove, fixPuyo, isProcessing]);
 
@@ -227,6 +265,10 @@ function App() {
       setOpponentState(field);
     });
 
+    socket.on('receiveNuisancePuyos', (nuisancePuyos: number) => {
+        setGameState(prev => ({ ...prev, incomingNuisancePuyos: prev.incomingNuisancePuyos + nuisancePuyos }));
+    });
+
     socket.on('roomFull', (roomId: string) => {
       alert(`Room ${roomId} is full. Please try another room.`);
     });
@@ -239,6 +281,7 @@ function App() {
     return () => {
       socket.off('startGame');
       socket.off('opponentFieldUpdate');
+      socket.off('receiveNuisancePuyos');
       socket.off('roomFull');
       socket.off('opponentDisconnected');
     };
@@ -300,6 +343,7 @@ function App() {
             <div className="side-panel">
                 <NextPuyoField puyos={gameState.nextPuyos} />
                 <div className="score">Score: {gameState.score}</div>
+                <div className="incoming-nuisance">Incoming: {gameState.incomingNuisancePuyos}</div>
             </div>
           </div>
           <div className="opponent-game">

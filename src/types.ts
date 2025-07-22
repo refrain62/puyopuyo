@@ -14,6 +14,7 @@ export type GameState = {
   score: number;
   isGameOver: boolean;
   nextPuyos: PlayerState[];
+  incomingNuisancePuyos: number; // Number of nuisance puyos to drop
 };
 
 export type PlayerPuyo = {
