@@ -30,7 +30,7 @@ function App() {
                 value={onlineGame.roomId}
                 onChange={(e) => onlineGame.setRoomId(e.target.value)}
               />
-              <button onClick={onlineGame.handleJoinRoom}>Join Room</button>
+              <button onClick={() => onlineGame.handleJoinRoom(onlineGame.roomId)}>Join Room</button>
             </div>
           ) : (
             // ルームに参加している場合のゲームUI

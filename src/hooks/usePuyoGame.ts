@@ -323,9 +323,10 @@ export const usePuyoGame = () => {
   /**
    * ルームに参加します。
    */
-  const handleJoinRoom = () => {
-    if (socket && roomId) {
-      socket.emit('joinRoom', roomId);
+  const handleJoinRoom = (roomIdToJoin: string) => {
+    if (socket && roomIdToJoin) {
+      setRoomId(roomIdToJoin);
+      socket.emit('joinRoom', roomIdToJoin);
     }
   };
 
