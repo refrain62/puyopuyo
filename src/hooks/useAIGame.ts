@@ -40,59 +40,97 @@ export const useAIGame = () => {
    * @returns 最適な移動後のぷよの状態
    */
   const findBestAIMove = useCallback((currentField: FieldState, currentPuyo: PlayerState): PlayerState => {
-    let bestMove: PlayerState = { ...currentPuyo };
-    let maxEvaluation = -1; // 評価値
+    let bestMove: PlayerState = { ...currentPuyo }; // デフォルトムーブ
+    let maxEvaluation = -Infinity;
 
-    // 可能なすべてのX座標と回転を試す
-    for (let x = 0; x < FIELD_WIDTH; x++) {
-      for (let rotation = 0; rotation < 4; rotation++) { // 4方向の回転をシミュレート
-        let simulatedPuyo: PlayerState = { ...currentPuyo };
+    // 4方向の回転を試す
+    for (let rotation = 0; rotation < 4; rotation++) {
+        let puyo1 = { ...currentPuyo.puyo1, x: 0, y: 0 }; // (0,0)を基点
+        let puyo2 = { ...currentPuyo.puyo2, x: currentPuyo.puyo2.x - currentPuyo.puyo1.x, y: currentPuyo.puyo2.y - currentPuyo.puyo1.y }; // puyo1からの相対位置
+
         // 回転を適用
-        if (rotation > 0) {
-          const { puyo1, puyo2 } = simulatedPuyo;
-          const dx = puyo2.x - puyo1.x;
-          const dy = puyo2.y - puyo1.y;
-          simulatedPuyo.puyo2 = { ...puyo2, x: puyo1.x - dy, y: puyo1.y + dx };
+        for (let i = 0; i < rotation; i++) {
+            const dx = puyo2.x;
+            const dy = puyo2.y;
+            puyo2.x = -dy;
+            puyo2.y = dx;
         }
 
-        // X座標を調整
-        simulatedPuyo.puyo1.x = x;
-        simulatedPuyo.puyo2.x = x + (simulatedPuyo.puyo2.x - currentPuyo.puyo1.x); // 相対位置を維持
+        // 可能なすべての列に配置してみる
+        for (let x = 0; x < FIELD_WIDTH; x++) {
+            const initialPuyo: PlayerState = {
+                puyo1: { ...puyo1, x: x, y: 0, color: currentPuyo.puyo1.color }, // yを0に初期化
+                puyo2: { ...puyo2, x: x + puyo2.x, y: 0 + puyo2.y, color: currentPuyo.puyo2.color } // yを0に初期化
+            };
 
-        // ぷよを一番下まで落とすシミュレーション
-        let tempPuyo: PlayerState = { ...simulatedPuyo };
-        while (canMove(currentField, { ...tempPuyo.puyo1, y: tempPuyo.puyo1.y + 1 }, { ...tempPuyo.puyo2, y: tempPuyo.puyo2.y + 1 })) {
-          tempPuyo.puyo1.y++;
-          tempPuyo.puyo2.y++;
-        }
+            // 移動先が有効かチェック (壁や他のぷよと衝突しないか)
+            if (!canMove(currentField, initialPuyo.puyo1, initialPuyo.puyo2)) {
+                continue;
+            }
 
-        // シミュレーション後のフィールドを作成
-        const simulatedField = currentField.map(row => row.map(puyo => ({ ...puyo })));
-        // ぷよがフィールドの有効な範囲内にあるか確認してからアクセス
-        if (tempPuyo.puyo1.y >= 0 && tempPuyo.puyo1.y < FIELD_HEIGHT && tempPuyo.puyo1.x >= 0 && tempPuyo.puyo1.x < FIELD_WIDTH) {
-            simulatedField[tempPuyo.puyo1.y][tempPuyo.puyo1.x] = { color: tempPuyo.puyo1.color };
-        }
-        if (tempPuyo.puyo2.y >= 0 && tempPuyo.puyo2.y < FIELD_HEIGHT && tempPuyo.puyo2.x >= 0 && tempPuyo.puyo2.x < FIELD_WIDTH) {
-            simulatedField[tempPuyo.puyo2.y][tempPuyo.puyo2.x] = { color: tempPuyo.puyo2.color };
-        }
+            // ぷよを一番下まで落とすシミュレーション
+            let tempPuyo = { ...initialPuyo };
+            while (canMove(currentField, { ...tempPuyo.puyo1, y: tempPuyo.puyo1.y + 1 }, { ...tempPuyo.puyo2, y: tempPuyo.puyo2.y + 1 })) {
+                tempPuyo.puyo1.y++;
+                tempPuyo.puyo2.y++;
+            }
 
-        // 接続をチェックし、消去されるぷよの数と連鎖数を評価
-        let evaluation = 0;
-        let simulatedChain = 0;
-        let tempSimulatedField = simulatedField;
-        while (true) {
-            const { newField, erased, erasedCount } = checkConnections(tempSimulatedField);
-            if (!erased) break;
-            simulatedChain++;
-            evaluation += erasedCount * 10 + simulatedChain * 100; // 消去数と連鎖数で評価
-            tempSimulatedField = applyGravity(newField);
-        }
+            // ぷよがフィールド外ならスキップ
+            if (tempPuyo.puyo1.y < 0 || tempPuyo.puyo2.y < 0) continue;
 
-        if (evaluation > maxEvaluation) {
-          maxEvaluation = evaluation;
-          bestMove = tempPuyo;
+            // シミュレーション後のフィールドを作成
+            const simulatedField = currentField.map(row => row.map(puyo => ({ ...puyo })));
+            if (simulatedField[tempPuyo.puyo1.y]?.[tempPuyo.puyo1.x] !== undefined) {
+                simulatedField[tempPuyo.puyo1.y][tempPuyo.puyo1.x] = { color: tempPuyo.puyo1.color };
+            }
+            if (simulatedField[tempPuyo.puyo2.y]?.[tempPuyo.puyo2.x] !== undefined) {
+                simulatedField[tempPuyo.puyo2.y][tempPuyo.puyo2.x] = { color: tempPuyo.puyo2.color };
+            }
+
+            // 評価
+            let evaluation = 0;
+            let simulatedChain = 0;
+            let totalErasedCount = 0;
+            let tempSimulatedField = simulatedField;
+            let fieldAfterChain = simulatedField;
+
+            while (true) {
+                const { newField, erased, erasedCount } = checkConnections(tempSimulatedField);
+                if (!erased) {
+                    fieldAfterChain = tempSimulatedField;
+                    break;
+                }
+                simulatedChain++;
+                totalErasedCount += erasedCount;
+                tempSimulatedField = applyGravity(newField);
+            }
+            
+            // 評価関数
+            // 1. 大連鎖は高評価
+            evaluation += (simulatedChain ** 2) * 100;
+            // 2. 消去数も評価
+            evaluation += totalErasedCount * 10;
+            // 3. フィールドは低い方が良い
+            const fieldHeight = fieldAfterChain.reduce((max, row, y) => row.some(p => p.color) ? FIELD_HEIGHT - y : max, 0);
+            evaluation -= fieldHeight * 5;
+            // 4. 同じ色がまとまっていると良い
+            let adjacentBonus = 0;
+            for (let y = 0; y < FIELD_HEIGHT; y++) {
+                for (let x = 0; x < FIELD_WIDTH; x++) {
+                    const color = fieldAfterChain[y][x].color;
+                    if (color) {
+                        if (x + 1 < FIELD_WIDTH && fieldAfterChain[y][x+1].color === color) adjacentBonus++;
+                        if (y + 1 < FIELD_HEIGHT && fieldAfterChain[y+1][x].color === color) adjacentBonus++;
+                    }
+                }
+            }
+            evaluation += adjacentBonus;
+
+            if (evaluation > maxEvaluation) {
+                maxEvaluation = evaluation;
+                bestMove = initialPuyo;
+            }
         }
-      }
     }
     return bestMove;
   }, [canMove, checkConnections, applyGravity]);
@@ -222,17 +260,37 @@ export const useAIGame = () => {
     return () => clearInterval(gameLoop);
   }, [dropPuyo, gameState.isGameOver]);
 
-  // AI game loop (simple: just drops puyo)
+  // AI game loop
   useEffect(() => {
-    if (aiGameState.isGameOver || isProcessing) return; // 処理中はAIを停止
-    const aiGameLoop = setInterval(() => {
-      // AIの思考と操作
-      const bestMove = findBestAIMove(aiGameState.field, aiPlayerState);
-      setAIPlayerState(bestMove);
-      dropPuyo(true); // ぷよを落下させる
-    }, 1000);
-    return () => clearInterval(aiGameLoop);
-  }, [dropPuyo, aiGameState.isGameOver, aiGameState.field, aiPlayerState, findBestAIMove, isProcessing]);
+    if (aiGameState.isGameOver || isProcessing) return;
+
+    const aiTurn = async () => {
+        setIsProcessing(true); // AIのターン開始
+        await sleep(500); // プレイヤーが視認するための短い待機
+
+        // 1. 最適な手を計算する
+        const bestMove = findBestAIMove(aiGameState.field, aiPlayerState);
+
+        // 2. 計算した手にぷよを移動させる (状態を直接更新)
+        let movedPuyo = { ...bestMove };
+
+        // 3. ぷよを一番下まで落下させる
+        while (canMove(aiGameState.field, { ...movedPuyo.puyo1, y: movedPuyo.puyo1.y + 1 }, { ...movedPuyo.puyo2, y: movedPuyo.puyo2.y + 1 })) {
+            movedPuyo.puyo1.y++;
+            movedPuyo.puyo2.y++;
+        }
+        setAIPlayerState(movedPuyo);
+        await sleep(100); // 落下を視覚的に見せるための待機
+
+        // 4. ぷよを固定し、連鎖処理などを行う
+        await fixPuyo(true);
+        setIsProcessing(false); // AIのターン終了
+    };
+
+    const timeoutId = setTimeout(aiTurn, 1000); // 次のAIのターンを予約
+
+    return () => clearTimeout(timeoutId);
+  }, [aiGameState.isGameOver, aiGameState.field, aiPlayerState, isProcessing, findBestAIMove, fixPuyo, canMove]);
 
   const handleKeyPress = useCallback((e: KeyboardEvent) => {
     if (isProcessing || gameState.isGameOver) return;
